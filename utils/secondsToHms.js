@@ -1,4 +1,4 @@
-const secondsToHms = seconds => {
+export default seconds => {
   const h = Math.floor(seconds / 3600); // 3600 = seconds in 1 hour
   const m = Math.floor((seconds % 3600) / 60);
   const s = Math.floor((seconds % 3600) % 60);
@@ -9,4 +9,3 @@ const secondsToHms = seconds => {
 
   return `${hour}:${minute}:${second}`;
 };
-export default secondsToHms;

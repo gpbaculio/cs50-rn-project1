@@ -15,64 +15,74 @@ import { secondsToHms } from './utils';
 export default class App extends React.Component {
   state = {
     percent: new Animated.Value(0),
-    timeRemaining: 5 * 1000, // seconds
+    timeRemaining: 5, // seconds
     workDuration: '25:00',
     breakDuration: '05:00',
     start: false,
-    time: '00:00:00',
+    time: secondsToHms(5),
     session: 'Work',
     workMinsInput: '25',
     breakMinsInput: '05',
     workSecsInput: '5',
-    breakSecsInput: '5'
+    breakSecsInput: '5',
+    startTimer: 0,
+    pause: false
   };
-  startAnimation = () => {
-    if (!this.state.start) {
-      this.setState({ percent: new Animated.Value(0) });
-    }
+  startAnimation = ms => {
     this.animation = Animated.timing(this.state.percent, {
       toValue: width / 2,
-      duration: this.state.timeRemaining
+      duration: this.state.timeRemaining * 1000
     });
-    this.animation.start();
-  };
-  playTimer = ms => {
-    this.setState({ start: !this.state.start }, this.startAnimation);
-    let seconds = ((ms % 60000) / 1000).toFixed(0);
-    const startTimer = setInterval(() => {
-      seconds = seconds - 1;
-      const time = secondsToHms(seconds);
-      this.setState({
-        pause: false,
-        seconds,
-        time
+    if (this.state.pause) {
+      this.state.percent.stopAnimation(val => {
+        this.state.percent.setValue(val);
       });
-      if (seconds === 0) {
-        clearInterval(startTimer);
-        // const session = this.state.session === 'Work' ? 'Work' : 'Break';
-        // this.setState({ session }, () => {
-        //   const { session, workDuration, breakDuration } = this.state;
-        //   const duration = session === 'Work' ? workDuration : breakDuration;
-        //   this.playTimer(duration);
-        // });
-      }
-    }, 1000);
+      clearInterval(this.state.startTimer);
+    }
+    if (this.state.start) {
+      this.animation.start();
+      const startTimer = setInterval(() => {
+        const time = secondsToHms(this.state.timeRemaining - 1);
+        this.setState({
+          startTimer,
+          pause: false,
+          seconds: this.state.timeRemaining - 1,
+          timeRemaining: this.state.timeRemaining - 1,
+          time
+        });
+        if (this.state.timeRemaining === 0) {
+          this.setState({
+            start: false,
+            percent: new Animated.Value(0),
+            timeRemaining: 5
+          });
+          clearInterval(this.state.startTimer);
+        }
+      }, 1000);
+    }
   };
-  onPause = () => {
-    console.log('paused');
+  onPlay = ms => {
+    this.setState(
+      ({ start, seconds }) => {
+        if (start && seconds !== 0) {
+          return { pause: true, start: false };
+        }
+        return { start: true };
+      },
+      () => this.startAnimation(ms)
+    );
   };
   onReset = () => {
     console.log('reset');
   };
-  handleMinsInput = (mins, type) => {
-    console.log('mins input');
-  };
-  handleSecsInput = () => {
-    console.log('mins input');
+  handleTimeInput = (key, val) => {
+    this.setState({ [key]: val });
   };
   render() {
+    console.log('percent', this.state.percent);
+    const height = this.state.percent;
     const fillAnim = {
-      height: this.state.percent
+      height
     };
     const {
       start,
@@ -82,23 +92,20 @@ export default class App extends React.Component {
       workSecsInput,
       breakSecsInput,
       session,
-      minsInput,
-      secsInput,
       time
     } = this.state;
+    console.log('timeRemaining ', timeRemaining);
     return (
       <View style={styles.container}>
-        <TouchableOpacity
-          style={styles.progressContainer}
-          onPress={() => this.playTimer(timeRemaining)}>
+        <View style={styles.progressContainer}>
           <Text style={styles.timer}>{time}</Text>
-          {start && <Animated.View style={[styles.progress, fillAnim]} />}
+          <Animated.View style={[styles.progress, fillAnim]} />
           <Text>{`${session} Time`}</Text>
-        </TouchableOpacity>
+        </View>
         <View style={styles.controlsContainer}>
           <View style={styles.controls}>
             <Button
-              onPress={this.onPause}
+              onPress={() => this.onPlay(timeRemaining)}
               title={start ? 'Pause' : 'Start'}
               color="#841584"
             />
@@ -111,7 +118,7 @@ export default class App extends React.Component {
               <TextInput
                 keyboardType="numeric"
                 style={styles.minsInput}
-                onChangeText={mins => this.handleMinsInput(mins, 'work')}
+                onChangeText={mins => this.handleTimeInput('workMins', mins)}
                 value={workMinsInput}
               />
             </View>
@@ -120,7 +127,7 @@ export default class App extends React.Component {
               <TextInput
                 keyboardType="numeric"
                 style={styles.secsInput}
-                onChangeText={secs => this.handleMinsInput(secs, 'work')}
+                onChangeText={secs => this.handleTimeInput('workSeconds', secs)}
                 value={workSecsInput}
               />
             </View>
@@ -132,7 +139,7 @@ export default class App extends React.Component {
               <TextInput
                 keyboardType="numeric"
                 style={styles.minsInput}
-                onChangeText={mins => this.handleMinsInput(mins, 'break')}
+                onChangeText={mins => this.handleTimeInput('breakMins', mins)}
                 value={breakMinsInput}
               />
             </View>
@@ -141,7 +148,9 @@ export default class App extends React.Component {
               <TextInput
                 keyboardType="numeric"
                 style={styles.secsInput}
-                onChangeText={secs => this.handleMinsInput(secs, 'break')}
+                onChangeText={secs =>
+                  this.handleTimeInput('breakSeconds', secs)
+                }
                 value={breakSecsInput}
               />
             </View>
@@ -212,6 +221,7 @@ const styles = StyleSheet.create({
     width: width / 2,
     height: width / 2,
     borderRadius: width / 2,
+    backgroundColor: 'transparent',
     borderWidth: 0.5,
     borderColor: '#FF0000',
     overflow: 'hidden',
