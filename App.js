@@ -10,28 +10,56 @@ import {
   TextInput
 } from 'react-native';
 
-import { secondsToHms } from './utils';
+import { secondsToHms, minutesToSeconds } from './utils';
+
+const DEFAULTS = {
+  work: {
+    minutes: '00',
+    seconds: '05'
+  },
+  break: {
+    minutes: '00',
+    seconds: '05'
+  },
+  session: 'Work'
+};
 
 export default class App extends React.Component {
   state = {
     percent: new Animated.Value(0),
-    timeRemaining: 5, // seconds
-    workDuration: '25:00',
-    breakDuration: '05:00',
+    timeRemaining: 0, // seconds
     start: false,
-    time: secondsToHms(5),
+    time: '00:00:00',
     session: 'Work',
-    workMinsInput: '25',
-    breakMinsInput: '05',
-    workSecsInput: '5',
-    breakSecsInput: '5',
+    workMins: '00',
+    workSecs: '00',
+    breakMins: '00',
+    breakSecs: '00',
     startTimer: 0,
-    pause: false
+    pause: false,
+    totalSeconds: 0
   };
-  startAnimation = ms => {
+  componentDidMount() {
+    const { minutes: workMins, seconds: workSecs } = DEFAULTS.work;
+    const { minutes: breakMins, seconds: breakSecs } = DEFAULTS.break;
+    const totalSeconds =
+      DEFAULTS.session === 'Work'
+        ? minutesToSeconds(workMins) + parseInt(workSecs)
+        : minutesToSeconds(breakMins) + parseInt(breakSecs);
+    this.setState({
+      workMins: workMins,
+      workSecs: workSecs,
+      breakMins: breakMins,
+      breakSecs: breakSecs,
+      session: DEFAULTS.session,
+      time: secondsToHms(totalSeconds),
+      totalSeconds
+    });
+  }
+  startAnimation = () => {
     this.animation = Animated.timing(this.state.percent, {
       toValue: width / 2,
-      duration: this.state.timeRemaining * 1000
+      duration: this.state.totalSeconds * 1000
     });
     if (this.state.pause) {
       this.state.percent.stopAnimation(val => {
@@ -42,35 +70,42 @@ export default class App extends React.Component {
     if (this.state.start) {
       this.animation.start();
       const startTimer = setInterval(() => {
-        const time = secondsToHms(this.state.timeRemaining - 1);
+        const time = secondsToHms(this.state.totalSeconds - 1);
         this.setState({
           startTimer,
           pause: false,
-          seconds: this.state.timeRemaining - 1,
-          timeRemaining: this.state.timeRemaining - 1,
-          time
+          time,
+          totalSeconds: this.state.totalSeconds - 1
         });
-        if (this.state.timeRemaining === 0) {
-          this.setState({
-            start: false,
-            percent: new Animated.Value(0),
-            timeRemaining: 5
-          });
+        if (this.state.totalSeconds === 0) {
           clearInterval(this.state.startTimer);
+          const newTotalSeconds =
+            this.state.session === 'Work'
+              ? minutesToSeconds(this.state.breakMins) +
+                parseInt(this.state.breakSecs)
+              : minutesToSeconds(this.state.workMins) +
+                parseInt(this.state.workSecs);
+          this.setState(
+            {
+              session: this.state.session === 'Work' ? 'Break' : 'Work',
+              start: false,
+              percent: new Animated.Value(0),
+              time: secondsToHms(newTotalSeconds),
+              totalSeconds: newTotalSeconds
+            },
+            this.onPlay
+          );
         }
       }, 1000);
     }
   };
-  onPlay = ms => {
-    this.setState(
-      ({ start, seconds }) => {
-        if (start && seconds !== 0) {
-          return { pause: true, start: false };
-        }
-        return { start: true };
-      },
-      () => this.startAnimation(ms)
-    );
+  onPlay = () => {
+    this.setState(({ start, seconds }) => {
+      if (start && seconds !== 0) {
+        return { pause: true, start: false };
+      }
+      return { start: true };
+    }, this.startAnimation);
   };
   onReset = () => {
     console.log('reset');
@@ -79,7 +114,6 @@ export default class App extends React.Component {
     this.setState({ [key]: val });
   };
   render() {
-    console.log('percent', this.state.percent);
     const height = this.state.percent;
     const fillAnim = {
       height
@@ -87,14 +121,13 @@ export default class App extends React.Component {
     const {
       start,
       timeRemaining,
-      workMinsInput,
-      breakMinsInput,
-      workSecsInput,
-      breakSecsInput,
+      workMins,
+      breakMins,
+      workSecs,
+      breakSecs,
       session,
       time
     } = this.state;
-    console.log('timeRemaining ', timeRemaining);
     return (
       <View style={styles.container}>
         <View style={styles.progressContainer}>
@@ -105,7 +138,7 @@ export default class App extends React.Component {
         <View style={styles.controlsContainer}>
           <View style={styles.controls}>
             <Button
-              onPress={() => this.onPlay(timeRemaining)}
+              onPress={this.onPlay}
               title={start ? 'Pause' : 'Start'}
               color="#841584"
             />
@@ -119,7 +152,7 @@ export default class App extends React.Component {
                 keyboardType="numeric"
                 style={styles.minsInput}
                 onChangeText={mins => this.handleTimeInput('workMins', mins)}
-                value={workMinsInput}
+                value={workMins}
               />
             </View>
             <View style={styles.secsContainer}>
@@ -128,7 +161,7 @@ export default class App extends React.Component {
                 keyboardType="numeric"
                 style={styles.secsInput}
                 onChangeText={secs => this.handleTimeInput('workSeconds', secs)}
-                value={workSecsInput}
+                value={workSecs}
               />
             </View>
           </View>
@@ -140,7 +173,7 @@ export default class App extends React.Component {
                 keyboardType="numeric"
                 style={styles.minsInput}
                 onChangeText={mins => this.handleTimeInput('breakMins', mins)}
-                value={breakMinsInput}
+                value={breakMins}
               />
             </View>
             <View style={styles.secsContainer}>
@@ -151,7 +184,7 @@ export default class App extends React.Component {
                 onChangeText={secs =>
                   this.handleTimeInput('breakSeconds', secs)
                 }
-                value={breakSecsInput}
+                value={breakSecs}
               />
             </View>
           </View>

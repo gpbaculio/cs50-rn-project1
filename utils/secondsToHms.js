@@ -5,7 +5,7 @@ export default seconds => {
 
   const hour = h >= 0 && h < 10 ? `0${h}` : `${h}`;
   const minute = m >= 0 && m < 10 ? `0${m}` : `${m}`;
-  const second = s > 0 && s < 10 ? `0${s}` : `${s}`;
+  const second = s >= 0 && s < 10 ? `0${s}` : `${s}`;
 
   return `${hour}:${minute}:${second}`;
 };
