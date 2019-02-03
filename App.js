@@ -6,6 +6,7 @@ import {
   Dimensions,
   Animated,
   TouchableOpacity,
+  KeyboardAvoidingView,
   Button,
   TextInput
 } from 'react-native';
@@ -47,10 +48,10 @@ export default class App extends React.Component {
         ? minutesToSeconds(workMins) + parseInt(workSecs)
         : minutesToSeconds(breakMins) + parseInt(breakSecs);
     this.setState({
-      workMins: workMins,
-      workSecs: workSecs,
-      breakMins: breakMins,
-      breakSecs: breakSecs,
+      workMins,
+      workSecs,
+      breakMins,
+      breakSecs,
       session: DEFAULTS.session,
       time: secondsToHms(totalSeconds),
       totalSeconds
@@ -111,7 +112,22 @@ export default class App extends React.Component {
     console.log('reset');
   };
   handleTimeInput = (key, val) => {
-    this.setState({ [key]: val });
+    console.log('key = ', key);
+    console.log('val = ', val);
+    this.setState({ [key]: val }, () => {
+      const newTotalSeconds =
+        this.state.session === 'Work'
+          ? minutesToSeconds(this.state.workMins) +
+            parseInt(this.state.workSecs)
+          : minutesToSeconds(this.state.breakMins) +
+            parseInt(this.state.breakSecs);
+      const time = secondsToHms(newTotalSeconds);
+      console.log('time = ', time);
+      this.setState({
+        totalSeconds: newTotalSeconds,
+        time
+      });
+    });
   };
   render() {
     const height = this.state.percent;
@@ -129,7 +145,7 @@ export default class App extends React.Component {
       time
     } = this.state;
     return (
-      <View style={styles.container}>
+      <KeyboardAvoidingView style={styles.container} behavior="padding" enabled>
         <View style={styles.progressContainer}>
           <Text style={styles.timer}>{time}</Text>
           <Animated.View style={[styles.progress, fillAnim]} />
@@ -160,7 +176,7 @@ export default class App extends React.Component {
               <TextInput
                 keyboardType="numeric"
                 style={styles.secsInput}
-                onChangeText={secs => this.handleTimeInput('workSeconds', secs)}
+                onChangeText={secs => this.handleTimeInput('workSecs', secs)}
                 value={workSecs}
               />
             </View>
@@ -181,15 +197,13 @@ export default class App extends React.Component {
               <TextInput
                 keyboardType="numeric"
                 style={styles.secsInput}
-                onChangeText={secs =>
-                  this.handleTimeInput('breakSeconds', secs)
-                }
+                onChangeText={secs => this.handleTimeInput('breakSecs', secs)}
                 value={breakSecs}
               />
             </View>
           </View>
         </View>
-      </View>
+      </KeyboardAvoidingView>
     );
   }
 }
@@ -264,6 +278,7 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     justifyContent: 'center',
-    alignItems: 'center'
+    alignItems: 'center',
+    padding: 20
   }
 });
