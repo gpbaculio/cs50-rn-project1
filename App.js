@@ -5,13 +5,12 @@ import {
   View,
   Dimensions,
   Animated,
-  TouchableOpacity,
   KeyboardAvoidingView,
   Button,
   TextInput
 } from 'react-native';
 
-import { secondsToHms, minutesToSeconds } from './utils';
+import { secondsToHms, getSeconds, vibrate } from './utils';
 
 const DEFAULTS = {
   work: {
@@ -25,6 +24,8 @@ const DEFAULTS = {
   session: 'Work'
 };
 
+const { width } = Dimensions.get('window');
+
 export default class App extends React.Component {
   state = {
     percent: new Animated.Value(0),
@@ -32,43 +33,61 @@ export default class App extends React.Component {
     start: false,
     time: '00:00:00',
     session: 'Work',
-    workMins: '00',
-    workSecs: '00',
-    breakMins: '00',
-    breakSecs: '00',
+    WorkMins: '00',
+    WorkSecs: '00',
+    BreakMins: '00',
+    BreakSecs: '00',
     startTimer: 0,
     pause: false,
     totalSeconds: 0
   };
   componentDidMount() {
-    const { minutes: workMins, seconds: workSecs } = DEFAULTS.work;
-    const { minutes: breakMins, seconds: breakSecs } = DEFAULTS.break;
+    const { minutes: WorkMins, seconds: WorkSecs } = DEFAULTS.work;
+    const { minutes: BreakMins, seconds: BreakSecs } = DEFAULTS.break;
     const totalSeconds =
       DEFAULTS.session === 'Work'
-        ? minutesToSeconds(workMins) + parseInt(workSecs)
-        : minutesToSeconds(breakMins) + parseInt(breakSecs);
+        ? getSeconds(WorkMins, WorkSecs)
+        : getSeconds(BreakMins, BreakSecs);
     this.setState({
-      workMins,
-      workSecs,
-      breakMins,
-      breakSecs,
+      WorkMins,
+      WorkSecs,
+      BreakMins,
+      BreakSecs,
       session: DEFAULTS.session,
       time: secondsToHms(totalSeconds),
       totalSeconds
     });
   }
+  getTotalSeconds = session => {
+    const {
+      WorkMins,
+      WorkSecs,
+      BreakMins,
+      BreakSecs
+    } = this.state
+    const totalSeconds = session === 'Work'
+      ? getSeconds(
+        WorkMins === '' ? '0' : WorkMins,
+        WorkSecs === '' ? '0' : WorkSecs
+      ) : getSeconds(
+        BreakMins === '' ? '0' : BreakMins,
+        BreakSecs === '' ? '0' : BreakSecs
+      );
+    return totalSeconds
+  }
   startAnimation = () => {
-    this.animation = Animated.timing(this.state.percent, {
+    const { percent, totalSeconds, pause, start } = this.state
+    this.animation = Animated.timing(percent, {
       toValue: width / 2,
-      duration: this.state.totalSeconds * 1000
+      duration: totalSeconds * 1000
     });
-    if (this.state.pause) {
-      this.state.percent.stopAnimation(val => {
-        this.state.percent.setValue(val);
+    if (pause) {
+      percent.stopAnimation(val => {
+        percent.setValue(val);
       });
       clearInterval(this.state.startTimer);
     }
-    if (this.state.start) {
+    if (start) {
       this.animation.start();
       const startTimer = setInterval(() => {
         const time = secondsToHms(this.state.totalSeconds - 1);
@@ -76,19 +95,16 @@ export default class App extends React.Component {
           startTimer,
           pause: false,
           time,
-          totalSeconds: this.state.totalSeconds - 1
+          totalSeconds: this.state.totalSeconds > 1 ? this.state.totalSeconds - 1 : 0
         });
         if (this.state.totalSeconds === 0) {
+          vibrate()
           clearInterval(this.state.startTimer);
-          const newTotalSeconds =
-            this.state.session === 'Work'
-              ? minutesToSeconds(this.state.breakMins) +
-                parseInt(this.state.breakSecs)
-              : minutesToSeconds(this.state.workMins) +
-                parseInt(this.state.workSecs);
+          const session = this.state.session === 'Work' ? 'Break' : 'Work'
+          const newTotalSeconds = this.getTotalSeconds(session)
           this.setState(
             {
-              session: this.state.session === 'Work' ? 'Break' : 'Work',
+              session,
               start: false,
               percent: new Animated.Value(0),
               time: secondsToHms(newTotalSeconds),
@@ -109,53 +125,67 @@ export default class App extends React.Component {
     }, this.startAnimation);
   };
   onReset = () => {
-    console.log('reset');
-  };
-  handleTimeInput = (key, val) => {
-    console.log('key = ', key);
-    console.log('val = ', val);
-    this.setState({ [key]: val }, () => {
-      const newTotalSeconds =
-        this.state.session === 'Work'
-          ? minutesToSeconds(this.state.workMins) +
-            parseInt(this.state.workSecs)
-          : minutesToSeconds(this.state.breakMins) +
-            parseInt(this.state.breakSecs);
-      const time = secondsToHms(newTotalSeconds);
-      console.log('time = ', time);
-      this.setState({
-        totalSeconds: newTotalSeconds,
-        time
-      });
+    clearInterval(this.state.startTimer);
+    const totalSeconds = this.getTotalSeconds(this.state.session)
+    this.setState({
+      totalSeconds,
+      time: secondsToHms(totalSeconds),
+      percent: new Animated.Value(0),
+      start: false,
+      pause: false
     });
   };
+  handleTimeInput = (key, val, timeFor) => {
+    this.setState({ [key]: val }, () => {
+      if (this.state.session.includes(timeFor)) {
+        const totalSeconds = this.getTotalSeconds(this.state.session)
+        const time = secondsToHms(totalSeconds);
+        clearInterval(this.state.startTimer);
+        this.setState({
+          totalSeconds,
+          time,
+          percent: new Animated.Value(0),
+          start: false
+        });
+      }
+    });
+  };
+  getPlayBtnTitle = () => {
+    const { pause, start } = this.state
+    if (pause) {
+      return 'Resume';
+    } else if (!start && !pause) {
+      return 'Start';
+    } else {
+      return 'Pause';
+    }
+  };
   render() {
-    const height = this.state.percent;
-    const fillAnim = {
-      height
-    };
     const {
-      start,
-      timeRemaining,
-      workMins,
-      breakMins,
-      workSecs,
-      breakSecs,
+      WorkMins,
+      WorkSecs,
+      BreakMins,
+      BreakSecs,
       session,
-      time
+      time,
+      percent
     } = this.state;
     return (
       <KeyboardAvoidingView style={styles.container} behavior="padding" enabled>
         <View style={styles.progressContainer}>
-          <Text style={styles.timer}>{time}</Text>
-          <Animated.View style={[styles.progress, fillAnim]} />
-          <Text>{`${session} Time`}</Text>
+          <Text style={styles.time}>
+            {time}
+          </Text>
+          <Animated.View style={[styles.progress, { height: percent }]} />
+          <Text style={styles.time}>
+            {`${session} Timer`}
+          </Text>
         </View>
         <View style={styles.controlsContainer}>
           <View style={styles.controls}>
             <Button
               onPress={this.onPlay}
-              title={start ? 'Pause' : 'Start'}
+              title={this.getPlayBtnTitle()}
               color="#841584"
             />
             <Button onPress={this.onReset} title="Reset" color="#841584" />
@@ -167,8 +197,8 @@ export default class App extends React.Component {
               <TextInput
                 keyboardType="numeric"
                 style={styles.minsInput}
-                onChangeText={mins => this.handleTimeInput('workMins', mins)}
-                value={workMins}
+                onChangeText={mins => this.handleTimeInput('WorkMins', mins, 'Work')}
+                value={WorkMins}
               />
             </View>
             <View style={styles.secsContainer}>
@@ -176,8 +206,8 @@ export default class App extends React.Component {
               <TextInput
                 keyboardType="numeric"
                 style={styles.secsInput}
-                onChangeText={secs => this.handleTimeInput('workSecs', secs)}
-                value={workSecs}
+                onChangeText={secs => this.handleTimeInput('WorkSecs', secs, 'Work')}
+                value={WorkSecs}
               />
             </View>
           </View>
@@ -188,8 +218,8 @@ export default class App extends React.Component {
               <TextInput
                 keyboardType="numeric"
                 style={styles.minsInput}
-                onChangeText={mins => this.handleTimeInput('breakMins', mins)}
-                value={breakMins}
+                onChangeText={mins => this.handleTimeInput('BreakMins', mins, 'Break')}
+                value={BreakMins}
               />
             </View>
             <View style={styles.secsContainer}>
@@ -197,8 +227,8 @@ export default class App extends React.Component {
               <TextInput
                 keyboardType="numeric"
                 style={styles.secsInput}
-                onChangeText={secs => this.handleTimeInput('breakSecs', secs)}
-                value={breakSecs}
+                onChangeText={secs => this.handleTimeInput('BreakSecs', secs, 'Break')}
+                value={BreakSecs}
               />
             </View>
           </View>
@@ -207,8 +237,6 @@ export default class App extends React.Component {
     );
   }
 }
-
-const width = Dimensions.get('window').width;
 
 const styles = StyleSheet.create({
   minsContainer: {
@@ -238,8 +266,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginTop: 20,
     justifyContent: 'space-between',
-    borderColor: 'black',
-    borderWidth: 1
   },
   timeContainer: {
     flexDirection: 'row',
@@ -249,28 +275,27 @@ const styles = StyleSheet.create({
   },
   controls: {
     flexDirection: 'row',
-    // borderColor: 'black',
-    // borderWidth: 3,
     width: width * 0.4,
     justifyContent: 'space-around'
   },
   progress: {
-    backgroundColor: '#FF0000',
+    backgroundColor: '#f9b8f9',
     width: '100%',
     bottom: 0,
     position: 'absolute',
     zIndex: 0
   },
-  timer: {
-    zIndex: 1
+  time: {
+    zIndex: 1,
+    color: '#841584'
   },
   progressContainer: {
     width: width / 2,
     height: width / 2,
     borderRadius: width / 2,
-    backgroundColor: 'transparent',
     borderWidth: 0.5,
-    borderColor: '#FF0000',
+    color: 'white',
+    borderColor: '#841584',
     overflow: 'hidden',
     justifyContent: 'center',
     alignItems: 'center'
